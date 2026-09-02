@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 
 import app.models  # noqa: F401 - ensures all models are registered in SQLAlchemy
 from app.config import get_settings
-from app.routers import auth, health
+from app.routers import auth, health, resume
 
 # Configure logging — server-side only, never expose to client
 logging.basicConfig(
@@ -73,8 +73,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ------------------------------------------------------------------
 app.include_router(auth.router)
 app.include_router(health.router)
+app.include_router(resume.router)
 
 # Future routers will be added here:
-# app.include_router(resume.router)
 # app.include_router(jobs.router)
 # app.include_router(match.router)
