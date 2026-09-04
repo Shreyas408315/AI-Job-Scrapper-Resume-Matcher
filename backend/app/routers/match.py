@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.match import MatchRequest, MatchResponse, MatchResult
-from app.services.match import rank_matches
+from app.schemas.match import MatchExplanation, MatchRequest, MatchResponse, MatchResult
+from app.services.match import explain_match, rank_matches
 
 router = APIRouter(prefix="/api/matches", tags=["Matches"])
 
@@ -40,3 +40,14 @@ async def create_matches(
         total_matches=len(results),
         matches=results,
     )
+
+
+@router.post("/detail/{match_id}/explain", response_model=MatchExplanation)
+async def create_match_explanation(
+    match_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a validated LLM explanation for an owned match."""
+    match = await explain_match(match_id, current_user, db)
+    return MatchExplanation.model_validate(match.llm_explanation)

@@ -1,5 +1,6 @@
 """Resume-to-job matching using pgvector cosine similarity."""
 
+import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -12,6 +13,9 @@ from app.models.job import Job
 from app.models.match import Match
 from app.models.resume import Resume
 from app.models.user import User
+from app.services.llm import generate_match_explanation
+
+logger = logging.getLogger(__name__)
 
 
 async def rank_matches(
@@ -66,3 +70,34 @@ async def rank_matches(
         .order_by(Match.similarity_score.desc())
     )
     return list((await db.execute(matches_query)).scalars().all())
+
+
+async def explain_match(match_id: UUID, user: User, db: AsyncSession) -> Match:
+    """Generate and persist an explanation for an owned match."""
+    match_query = (
+        select(Match)
+        .options(selectinload(Match.resume), selectinload(Match.job))
+        .join(Resume, Match.resume_id == Resume.id)
+        .where(Match.id == match_id, Resume.user_id == user.id)
+    )
+    match = (await db.execute(match_query)).scalar_one_or_none()
+
+    if match is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+
+    try:
+        explanation = await generate_match_explanation(
+            match.resume.extracted_text,
+            match.job.title,
+            match.job.description,
+        )
+    except Exception as exc:
+        logger.exception("Match explanation generation failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not generate match explanation right now.",
+        ) from exc
+
+    match.llm_explanation = explanation.model_dump()
+    await db.flush()
+    return match

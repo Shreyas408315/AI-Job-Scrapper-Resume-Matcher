@@ -32,3 +32,10 @@ class MatchResponse(BaseModel):
 class MatchRequest(BaseModel):
     """Request to trigger matching for a resume."""
     top_n: int = Field(default=10, ge=1, le=100)  # How many top matches to return
+
+
+class MatchExplanation(BaseModel):
+    """Validated structured output returned by the explanation model."""
+    match_score_reasoning: str = Field(min_length=1, max_length=4000)
+    missing_skills: list[str] = Field(default_factory=list, max_length=30)
+    resume_improvement_tips: list[str] = Field(min_length=2, max_length=4)
