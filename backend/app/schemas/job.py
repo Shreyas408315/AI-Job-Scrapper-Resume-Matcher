@@ -23,13 +23,8 @@ class JobResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class JobFetchRequest(BaseModel):
-    """Request to fetch jobs from a Greenhouse board."""
-    board_token: str  # e.g., "airbnb", "spotify"
-
-
-class JobFetchResponse(BaseModel):
-    """Result of a job fetch operation."""
-    jobs_fetched: int
-    jobs_new: int
-    board_token: str
+class JobSyncResponse(BaseModel):
+    """Summary returned after syncing a Greenhouse board."""
+    processed: int
+    skipped: int
+    message: str

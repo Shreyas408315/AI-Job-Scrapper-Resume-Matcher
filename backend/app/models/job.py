@@ -75,3 +75,8 @@ class Job(Base):
 
     # Relationships
     matches = relationship("Match", back_populates="job", cascade="all, delete-orphan")
+
+    @property
+    def has_embedding(self) -> bool:
+        """Expose embedding availability without returning the vector itself."""
+        return self.embedding is not None

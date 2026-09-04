@@ -1,11 +1,15 @@
 import asyncio
 import sys
 
+import pytest
+
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from app.database import async_session
 from app.services.auth import register_user, login_user
+
+pytestmark = pytest.mark.asyncio
 
 async def test_db():
     print("Testing DB connection and Auth services...")

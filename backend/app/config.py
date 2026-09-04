@@ -7,16 +7,18 @@ WHY PYDANTIC SETTINGS:
 - Defaults: provides safe local-dev defaults so the app starts without a .env file.
 
 SECURITY: All secrets (API keys, DB password, JWT secret) come from environment
-variables. The .env file is in .gitignore and never committed.
+variables. The .env file is in .gitignore and never committed. The JWT secret
+is required at startup rather than having a predictable fallback.
 """
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """All application settings. Values are loaded from .env file or environment."""
+    """All application settings loaded from the .env file or environment."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -28,7 +30,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5433/jobmatcher"
 
     # --- Auth ---
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    # No fallback is provided: a predictable signing key would let attackers
+    # forge tokens in any environment where the setting was overlooked.
+    SECRET_KEY: str = Field(min_length=32)
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_MINUTES: int = 1440  # 24 hours
 
