@@ -10,6 +10,8 @@ SECURITY CONTROLS:
 """
 
 import io
+import logging
+import zipfile
 from uuid import UUID
 
 import magic
@@ -23,6 +25,8 @@ from app.config import get_settings
 from app.models.resume import Resume
 from app.models.user import User
 from app.services.embedding import generate_embedding
+
+logger = logging.getLogger(__name__)
 
 # Allowed MIME types mapped to our internal file_type enum strings
 ALLOWED_MIMES = {
@@ -41,33 +45,33 @@ async def process_and_store_resume(
     """
     settings = get_settings()
     
-    # Read the file contents into memory
-    file_bytes = await file.read()
+    # Read at most one byte beyond the limit so oversized uploads do not fill
+    # memory before validation rejects them.
+    file_bytes = await file.read(settings.max_upload_bytes + 1)
     
     # 1. Size Validation
     if len(file_bytes) > settings.max_upload_bytes:
         raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large. Maximum size is {settings.MAX_UPLOAD_SIZE_MB}MB."
         )
         
     # 2. Magic Bytes Validation
-    mime_type = magic.from_buffer(file_bytes, mime=True)
-    if mime_type not in ALLOWED_MIMES:
+    file_type = detect_file_type(file_bytes)
+    if file_type is None:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported file type. Detected {mime_type}. Only PDF and DOCX are allowed."
+            detail="Unsupported file type. Only PDF and DOCX files are allowed.",
         )
-        
-    file_type = ALLOWED_MIMES[mime_type]
     
     # 3. Text Extraction
     try:
         extracted_text = extract_text_from_bytes(file_bytes, file_type)
-    except Exception as e:
+    except Exception:
+        logger.exception("Resume text extraction failed for uploaded file")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Could not extract text from file: {str(e)}"
+            detail="Could not extract text from the uploaded file.",
         )
         
     if not extracted_text.strip():
@@ -79,11 +83,12 @@ async def process_and_store_resume(
     # 4. Generate Embedding
     try:
         embedding = await generate_embedding(extracted_text)
-    except Exception as e:
+    except Exception:
+        logger.exception("Resume embedding generation failed")
         # In a real app, this should be a background job, but for MVP it's sync.
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to generate vector embedding from LLM provider: {str(e)}"
+            detail="Could not process the uploaded resume right now.",
         )
         
     # 5. Store in Database
@@ -112,11 +117,34 @@ def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
                     text_chunks.append(page_text)
                     
     elif file_type == "docx":
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+            if "[Content_Types].xml" not in archive.namelist():
+                raise ValueError("Invalid DOCX package")
         doc = Document(io.BytesIO(file_bytes))
         for para in doc.paragraphs:
             text_chunks.append(para.text)
             
     return "\n".join(text_chunks)
+
+
+def detect_file_type(file_bytes: bytes) -> str | None:
+    """Detect supported types from file content, not the filename extension."""
+    mime_type = magic.from_buffer(file_bytes, mime=True)
+
+    if mime_type == "application/pdf" and file_bytes.startswith(b"%PDF-"):
+        return "pdf"
+
+    if zipfile.is_zipfile(io.BytesIO(file_bytes)):
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+                names = set(archive.namelist())
+        except (OSError, zipfile.BadZipFile):
+            return None
+
+        if "[Content_Types].xml" in names and "word/document.xml" in names:
+            return "docx"
+
+    return None
 
 
 async def get_user_resumes(user: User, db: AsyncSession) -> list[Resume]:
