@@ -13,7 +13,7 @@ is required at startup rather than having a predictable fallback.
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,16 @@ class Settings(BaseSettings):
 
     # --- Database ---
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5433/jobmatcher"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def use_async_postgres_driver(cls, value: str) -> str:
+        """Accept hosted provider URLs while keeping SQLAlchemy async."""
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return value
 
     # --- Auth ---
     # No fallback is provided: a predictable signing key would let attackers
