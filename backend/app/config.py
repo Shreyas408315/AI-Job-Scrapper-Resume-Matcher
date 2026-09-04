@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     # --- CORS ---
-    ALLOWED_ORIGINS: str = "http://localhost:3000"
+    ALLOWED_ORIGINS: str = "http://localhost:5173"
 
     # --- File Uploads ---
     MAX_UPLOAD_SIZE_MB: int = 5

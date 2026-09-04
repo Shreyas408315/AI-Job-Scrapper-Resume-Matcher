@@ -29,4 +29,14 @@ The local database remains available with:
 docker compose up -d
 ```
 
-The current repository contains the backend only. The React frontend should be deployed separately after Day 6 and its URL added to `ALLOWED_ORIGINS`.
+The React frontend lives in `frontend/` and can be deployed as a static Vite site. Set `VITE_API_URL` to the deployed backend URL before building, then add the frontend URL to the backend's `ALLOWED_ORIGINS`.
+
+For local development:
+
+```powershell
+cd frontend
+copy .env.example .env
+npm run dev
+```
+
+The local frontend runs at `http://localhost:5173` and calls the backend at `http://localhost:8000`.
