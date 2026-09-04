@@ -9,11 +9,13 @@ SECURITY & DESIGN DECISIONS:
 """
 
 import html
+import logging
 import re
 
 import httpx
 
 GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true"
+logger = logging.getLogger(__name__)
 
 
 def clean_html(raw_html: str) -> str:
@@ -59,6 +61,16 @@ async def fetch_jobs_from_greenhouse(board_token: str) -> list[dict]:
     
     cleaned_jobs = []
     for job in jobs:
+        if not isinstance(job, dict) or "id" not in job:
+            logger.warning("Skipping malformed Greenhouse job payload")
+            continue
+
+        try:
+            external_id = int(job["id"])
+        except (TypeError, ValueError):
+            logger.warning("Skipping Greenhouse job with invalid external id")
+            continue
+
         # Extract location name (Greenhouse stores it nested)
         location = job.get("location", {}).get("name", "Remote / Unspecified")
         
@@ -71,7 +83,7 @@ async def fetch_jobs_from_greenhouse(board_token: str) -> list[dict]:
             continue
             
         cleaned_jobs.append({
-            "external_id": int(job["id"]),
+            "external_id": external_id,
             "title": job.get("title", "Untitled Job"),
             "company": board_token,
             "url": job.get("absolute_url", ""),

@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models.job import Job
 from app.services.embedding import generate_embedding
 from app.services.greenhouse import fetch_jobs_from_greenhouse
@@ -24,11 +25,15 @@ async def sync_greenhouse_jobs(board_token: str, db: AsyncSession) -> dict:
     
     Returns a summary dict of how many jobs were processed.
     """
+    normalized_token = board_token.strip().lower()
+    if normalized_token not in get_settings().greenhouse_whitelist:
+        raise ValueError("Greenhouse board is not allowed")
+
     # 1. Fetch from Greenhouse
-    fetched_jobs = await fetch_jobs_from_greenhouse(board_token)
+    fetched_jobs = await fetch_jobs_from_greenhouse(normalized_token)
     
     if not fetched_jobs:
-        return {"processed": 0, "skipped": 0, "message": f"No jobs found for {board_token}"}
+        return {"processed": 0, "skipped": 0, "message": "No jobs found"}
         
     processed_count = 0
     
@@ -42,7 +47,7 @@ async def sync_greenhouse_jobs(board_token: str, db: AsyncSession) -> dict:
             embedding = await generate_embedding(job_data["description"])
         except Exception as e:
             # If embedding fails (e.g. rate limit), skip this job and continue
-            print(f"Failed to embed job {job_data['external_id']}: {e}")
+            continue
             continue
             
         # 3. Upsert into database
@@ -77,7 +82,7 @@ async def sync_greenhouse_jobs(board_token: str, db: AsyncSession) -> dict:
     return {
         "processed": processed_count,
         "skipped": len(fetched_jobs) - processed_count,
-        "message": f"Successfully synced jobs for {board_token}"
+        "message": "Jobs synced successfully"
     }
 
 

@@ -10,6 +10,7 @@ SECURITY:
 """
 
 import httpx
+import re
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +36,7 @@ async def trigger_job_sync(
     and upsert them into the database.
     """
     # Basic validation to prevent completely malformed tokens
-    if not board_token.isalnum() and "-" not in board_token:
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", board_token.lower()):
         raise HTTPException(status_code=400, detail="Invalid board token format.")
         
     try:
@@ -43,10 +44,12 @@ async def trigger_job_sync(
         return JobSyncResponse(**result)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"Greenhouse board '{board_token}' not found.")
-        raise HTTPException(status_code=502, detail=f"Error communicating with Greenhouse: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred during sync: {e}")
+            raise HTTPException(status_code=404, detail="Greenhouse board not found.")
+        raise HTTPException(status_code=502, detail="Could not fetch jobs right now.")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Greenhouse board is not allowed.")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Could not sync jobs right now.")
 
 
 @router.get("", response_model=list[JobResponse])
