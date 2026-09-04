@@ -5,7 +5,7 @@ Match request/response schemas.
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MatchResult(BaseModel):
@@ -31,4 +31,4 @@ class MatchResponse(BaseModel):
 
 class MatchRequest(BaseModel):
     """Request to trigger matching for a resume."""
-    top_n: int = 10  # How many top matches to return
+    top_n: int = Field(default=10, ge=1, le=100)  # How many top matches to return
