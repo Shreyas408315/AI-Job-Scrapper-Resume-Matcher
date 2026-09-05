@@ -101,3 +101,17 @@ async def explain_match(match_id: UUID, user: User, db: AsyncSession) -> Match:
     match.llm_explanation = explanation.model_dump()
     await db.flush()
     return match
+
+
+async def get_owned_match(match_id: UUID, user: User, db: AsyncSession) -> Match:
+    """Load one match and its job only when it belongs to the user."""
+    match_query = (
+        select(Match)
+        .options(selectinload(Match.job))
+        .join(Resume, Match.resume_id == Resume.id)
+        .where(Match.id == match_id, Resume.user_id == user.id)
+    )
+    match = (await db.execute(match_query)).scalar_one_or_none()
+    if match is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+    return match

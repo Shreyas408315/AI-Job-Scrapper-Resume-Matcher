@@ -16,6 +16,7 @@ class MatchResult(BaseModel):
     company: str
     location: str | None
     job_url: str
+    job_description: str
     similarity_score: float
     llm_explanation: dict | None  # Populated after LLM analysis
 

@@ -43,9 +43,40 @@ function Dashboard() {
 }
 
 function DetailPage() {
-  const { matchId } = useParams(); const [explanation, setExplanation] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
-  async function explain() { setBusy(true); setError(''); try { setExplanation(await apiRequest(`/api/matches/detail/${matchId}/explain`, { method: 'POST' })) } catch (err) { setError(err.message) } finally { setBusy(false) } }
-  return <section className="page-section detail-page"><Link className="back-link" to="/dashboard">← Back to matches</Link><p className="eyebrow">MATCH DETAIL</p><h1>Make the signal useful.</h1><p className="lede">Ask for a clear read on the gap between your current story and this opportunity.</p><div className="explain-panel">{!explanation ? <><div><span className="orb">✦</span><h2>Ready for a closer read?</h2><p>The analysis returns reasoning, missing skills, and concrete resume edits.</p></div><button className="primary-button" onClick={explain} disabled={busy}>{busy ? 'Analyzing...' : 'Generate explanation'}</button></> : <><p className="eyebrow">MODEL READ</p><h2>{explanation.match_score_reasoning}</h2><div className="detail-grid"><div><p className="eyebrow">MISSING SKILLS</p>{explanation.missing_skills.length ? <ul>{explanation.missing_skills.map((skill) => <li key={skill}>{skill}</li>)}</ul> : <p>No clear gaps found.</p>}</div><div><p className="eyebrow">RESUME IMPROVEMENTS</p><ul>{explanation.resume_improvement_tips.map((tip) => <li key={tip}>{tip}</li>)}</ul></div></div></>}</div>{error && <p className="error">{error}</p>}</section>
+  const { matchId } = useParams()
+  const [match, setMatch] = useState(null)
+  const [explanation, setExplanation] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState('loading')
+
+  useEffect(() => {
+    apiRequest(`/api/matches/detail/${matchId}`)
+      .then((data) => { setMatch(data); setExplanation(data.llm_explanation) })
+      .catch((err) => setError(err.message))
+      .finally(() => setBusy(''))
+  }, [matchId])
+
+  async function explain() {
+    setBusy('explain')
+    setError('')
+    try {
+      setExplanation(await apiRequest(`/api/matches/detail/${matchId}/explain`, { method: 'POST' }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  if (busy === 'loading') return <section className="empty-state"><p className="status-line">Loading job details...</p></section>
+  if (!match) return <section className="empty-state"><p className="error">{error || 'Match not found.'}</p><Link className="primary-button inline-button" to="/dashboard">Back to matches</Link></section>
+
+  return <section className="page-section detail-page">
+    <Link className="back-link" to="/dashboard">← Back to matches</Link>
+    <div className="detail-heading"><div><p className="eyebrow">MATCH DETAIL</p><h1>{match.job_title}</h1><p className="detail-company">{match.company} · {match.location || 'Location flexible'}</p></div><strong className="detail-score">{Math.round(match.similarity_score * 100)}%<small> match</small></strong></div>
+    <div className="job-description"><div className="job-description-head"><p className="eyebrow">JOB DESCRIPTION</p><a href={match.job_url} target="_blank" rel="noreferrer">View original ↗</a></div><p>{match.job_description}</p></div>
+    <div className="explain-panel">{!explanation ? <><div><span className="orb">✦</span><h2>Ready for a closer read?</h2><p>The analysis returns reasoning, missing skills, and concrete resume edits.</p></div><button className="primary-button" onClick={explain} disabled={busy}>{busy === 'explain' ? 'Analyzing...' : 'Generate explanation'}</button></> : <><p className="eyebrow">MODEL READ</p><h2>{explanation.match_score_reasoning}</h2><div className="detail-grid"><div><p className="eyebrow">MISSING SKILLS</p>{explanation.missing_skills.length ? <ul>{explanation.missing_skills.map((skill) => <li key={skill}>{skill}</li>)}</ul> : <p>No clear gaps found.</p>}</div><div><p className="eyebrow">RESUME IMPROVEMENTS</p><ul>{explanation.resume_improvement_tips.map((tip) => <li key={tip}>{tip}</li>)}</ul></div></div></>}</div>{error && <p className="error">{error}</p>}
+  </section>
 }
 
 function Protected({ children }) { return localStorage.getItem('access_token') ? children : <Navigate to="/login" replace /> }

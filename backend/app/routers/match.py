@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.match import MatchExplanation, MatchRequest, MatchResponse, MatchResult
-from app.services.match import explain_match, rank_matches
+from app.services.match import explain_match, get_owned_match, rank_matches
 
 router = APIRouter(prefix="/api/matches", tags=["Matches"])
 
@@ -30,6 +30,7 @@ async def create_matches(
             company=match.job.company,
             location=match.job.location,
             job_url=match.job.url,
+            job_description=match.job.description,
             similarity_score=match.similarity_score,
             llm_explanation=match.llm_explanation,
         )
@@ -51,3 +52,24 @@ async def create_match_explanation(
     """Generate a validated LLM explanation for an owned match."""
     match = await explain_match(match_id, current_user, db)
     return MatchExplanation.model_validate(match.llm_explanation)
+
+
+@router.get("/detail/{match_id}", response_model=MatchResult)
+async def get_match_detail(
+    match_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return job details for an owned match."""
+    match = await get_owned_match(match_id, current_user, db)
+    return MatchResult(
+        id=match.id,
+        job_id=match.job_id,
+        job_title=match.job.title,
+        company=match.job.company,
+        location=match.job.location,
+        job_url=match.job.url,
+        job_description=match.job.description,
+        similarity_score=match.similarity_score,
+        llm_explanation=match.llm_explanation,
+    )
