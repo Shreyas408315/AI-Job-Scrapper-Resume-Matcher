@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # --- CORS ---
-    ALLOWED_ORIGINS: str = "http://localhost:5173"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # --- File Uploads ---
     MAX_UPLOAD_SIZE_MB: int = 5

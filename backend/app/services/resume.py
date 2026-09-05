@@ -70,13 +70,13 @@ async def process_and_store_resume(
     except Exception:
         logger.exception("Resume text extraction failed for uploaded file")
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Could not extract text from the uploaded file.",
         )
         
     if not extracted_text.strip():
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="The file appears to be empty or contains no extractable text (e.g. image-only PDF)."
         )
         
