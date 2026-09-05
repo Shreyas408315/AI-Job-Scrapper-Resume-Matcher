@@ -19,9 +19,12 @@ SECURITY NOTES:
   a generic "Invalid token" message — no details leaked.
 """
 
-from collections.abc import AsyncGenerator
+import time
+from collections import defaultdict
+from collections.abc import AsyncGenerator, Callable
+from threading import Lock
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -33,6 +36,39 @@ from app.models.user import User
 
 # FastAPI security scheme — adds the lock icon in OpenAPI docs
 security = HTTPBearer()
+_rate_limit_lock = Lock()
+_rate_limit_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def rate_limit(max_requests: int, window_seconds: int) -> Callable:
+    """Return an in-memory request limiter for a single-process MVP.
+
+    The key combines the client address and route, so one expensive endpoint
+    cannot consume the allowance for a different endpoint. A shared store such
+    as Redis would be needed when running multiple application instances.
+    """
+    def dependency(request: Request) -> None:
+        now = time.monotonic()
+        client_host = request.client.host if request.client else "unknown"
+        key = f"{client_host}:{request.scope['path']}"
+
+        with _rate_limit_lock:
+            recent = [
+                timestamp
+                for timestamp in _rate_limit_buckets[key]
+                if now - timestamp < window_seconds
+            ]
+            if len(recent) >= max_requests:
+                retry_after = max(1, int(window_seconds - (now - recent[0])))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many requests. Please try again later.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+            recent.append(now)
+            _rate_limit_buckets[key] = recent
+
+    return dependency
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -89,7 +125,7 @@ async def get_current_user(
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+            detail="Invalid token",
         )
 
     return user

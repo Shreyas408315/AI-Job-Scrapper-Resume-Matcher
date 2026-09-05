@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import get_current_user, get_db
+from app.deps import get_current_user, get_db, rate_limit
 from app.models.user import User
 from app.schemas.match import MatchExplanation, MatchRequest, MatchResponse, MatchResult
 from app.services.match import explain_match, get_owned_match, rank_matches
@@ -19,6 +19,7 @@ async def create_matches(
     request: MatchRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(10, 60)),
 ):
     """Return the top jobs for an authenticated user's resume."""
     matches = await rank_matches(resume_id, current_user, request.top_n, db)
@@ -48,6 +49,7 @@ async def create_match_explanation(
     match_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(5, 60)),
 ):
     """Generate a validated LLM explanation for an owned match."""
     match = await explain_match(match_id, current_user, db)

@@ -40,3 +40,20 @@ npm run dev
 ```
 
 The local frontend runs at `http://localhost:5173` and calls the backend at `http://localhost:8000`.
+
+## Release checklist
+
+- [ ] Use managed PostgreSQL with pgvector enabled.
+- [ ] Set a random `SECRET_KEY` with at least 32 characters.
+- [ ] Set `OPENAI_API_KEY` only in the backend hosting provider.
+- [ ] Set `ALLOWED_ORIGINS` to the exact deployed frontend origin.
+- [ ] Confirm `.env` and uploaded files are not tracked by Git.
+- [ ] Run `pip-audit` and `npm audit` before release.
+- [ ] Verify health, authentication, upload, matching, and explanation flows.
+- [ ] Enable HTTPS and review logs to ensure resume text is never logged.
+
+The built-in rate limiter is process-local and suitable only for this single-instance MVP. Use a shared limiter before scaling horizontally.
+
+### Dependency audit note
+
+`npm audit --audit-level=high` is clean. `pip-audit` currently reports `ecdsa 0.19.2`, a transitive dependency of `python-jose`; both `ecdsa 0.19.2` and `python-jose 3.5.0` are the latest available versions at this time. Re-run the audit before deployment and replace the JWT library or upgrade when a vendor fix becomes available.

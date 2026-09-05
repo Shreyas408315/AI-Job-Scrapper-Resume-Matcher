@@ -14,7 +14,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import get_current_user, get_db
+from app.deps import get_current_user, get_db, rate_limit
 from app.models.user import User
 from app.schemas.job import JobResponse, JobSyncResponse
 from app.services.job import list_jobs, sync_greenhouse_jobs
@@ -27,6 +27,7 @@ async def trigger_job_sync(
     board_token: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
+    , _: None = Depends(rate_limit(2, 60))
 ):
     """
     Trigger a manual sync of jobs from a specific Greenhouse board token.
