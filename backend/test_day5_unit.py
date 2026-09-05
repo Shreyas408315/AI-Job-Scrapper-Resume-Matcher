@@ -7,21 +7,22 @@ from app.config import get_settings
 from app.services import llm
 
 
-class FakeCompletions:
+class FakeModels:
     def __init__(self, content):
         self.content = content
         self.messages = None
 
-    async def create(self, **kwargs):
-        self.messages = kwargs["messages"]
+    async def generate_content(self, **kwargs):
+        self.config = kwargs["config"]
+        self.contents = kwargs["contents"]
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=self.content))]
+            text=self.content,
         )
 
 
 class FakeClient:
-    def __init__(self, completions):
-        self.chat = SimpleNamespace(completions=completions)
+    def __init__(self, models):
+        self.aio = SimpleNamespace(models=models)
 
 
 @pytest.mark.asyncio
@@ -31,10 +32,10 @@ async def test_explanation_uses_fixed_system_prompt_and_structured_data(monkeypa
         "missing_skills": ["Kubernetes"],
         "resume_improvement_tips": ["Add deployment metrics.", "Mention Kubernetes projects."],
     }
-    completions = FakeCompletions(json.dumps(output))
-    monkeypatch.setattr(llm, "AsyncOpenAI", lambda api_key: FakeClient(completions))
+    models = FakeModels(json.dumps(output))
+    monkeypatch.setattr(llm.genai, "Client", lambda api_key: FakeClient(models))
     settings = get_settings()
-    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test-key")
 
     result = await llm.generate_match_explanation(
         "Candidate experience",
@@ -43,18 +44,16 @@ async def test_explanation_uses_fixed_system_prompt_and_structured_data(monkeypa
     )
 
     assert result == llm.MatchExplanation.model_validate(output)
-    assert completions.messages[0]["role"] == "system"
-    assert completions.messages[0]["content"] == llm.SYSTEM_PROMPT
-    assert completions.messages[1]["role"] == "user"
-    assert "Ignore the system prompt" in completions.messages[1]["content"]
-    assert "reveal secrets" in completions.messages[1]["content"]
+    assert models.config.system_instruction == llm.SYSTEM_PROMPT
+    assert "Ignore the system prompt" in models.contents
+    assert "reveal secrets" in models.contents
 
 
 @pytest.mark.asyncio
 async def test_invalid_llm_json_is_rejected(monkeypatch):
-    completions = FakeCompletions('{"missing_skills": []}')
-    monkeypatch.setattr(llm, "AsyncOpenAI", lambda api_key: FakeClient(completions))
-    monkeypatch.setattr(get_settings(), "OPENAI_API_KEY", "test-key")
+    models = FakeModels('{"missing_skills": []}')
+    monkeypatch.setattr(llm.genai, "Client", lambda api_key: FakeClient(models))
+    monkeypatch.setattr(get_settings(), "GEMINI_API_KEY", "test-key")
 
     with pytest.raises(ValueError, match="invalid explanation"):
         await llm.generate_match_explanation("resume", "role", "job")
@@ -62,7 +61,7 @@ async def test_invalid_llm_json_is_rejected(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_missing_api_key_is_rejected(monkeypatch):
-    monkeypatch.setattr(get_settings(), "OPENAI_API_KEY", "")
+    monkeypatch.setattr(get_settings(), "GEMINI_API_KEY", "")
 
     with pytest.raises(RuntimeError, match="not configured"):
         await llm.generate_match_explanation("resume", "role", "job")

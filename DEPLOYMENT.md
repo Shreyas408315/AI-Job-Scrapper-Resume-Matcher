@@ -8,7 +8,7 @@ Set these in the hosting provider dashboard. Do not commit a `.env` file.
 
 - `DATABASE_URL`: hosted PostgreSQL connection URL
 - `SECRET_KEY`: random value with at least 32 characters
-- `OPENAI_API_KEY`: OpenAI API key for embeddings and explanations
+- `GEMINI_API_KEY`: Gemini API key for embeddings and explanations
 - `ALLOWED_ORIGINS`: comma-separated frontend URL(s)
 - `GREENHOUSE_BOARD_WHITELIST`: approved Greenhouse board tokens
 

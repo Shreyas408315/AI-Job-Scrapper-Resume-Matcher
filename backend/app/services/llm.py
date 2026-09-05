@@ -3,7 +3,8 @@
 import json
 import logging
 
-from openai import AsyncOpenAI
+from google import genai
+from google.genai import types
 from pydantic import ValidationError
 
 from app.config import get_settings
@@ -28,8 +29,8 @@ async def generate_match_explanation(
 ) -> MatchExplanation:
     """Generate and validate a structured explanation for one match."""
     settings = get_settings()
-    if not settings.OPENAI_API_KEY:
-        raise RuntimeError("LLM provider is not configured")
+    if not settings.GEMINI_API_KEY:
+        raise RuntimeError("Gemini provider is not configured")
 
     user_content = json.dumps(
         {
@@ -41,18 +42,18 @@ async def generate_match_explanation(
         ensure_ascii=True,
     )
 
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    response = await client.aio.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=user_content,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0,
+            response_mime_type="application/json",
+        ),
     )
 
-    content = response.choices[0].message.content
+    content = response.text
     if not content:
         raise ValueError("LLM returned an empty explanation")
 

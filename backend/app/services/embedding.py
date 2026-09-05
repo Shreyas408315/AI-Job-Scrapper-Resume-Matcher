@@ -1,19 +1,7 @@
-"""
-Embedding service — calls LLM APIs to generate vector embeddings from text.
+"""Gemini embedding service."""
 
-DESIGN DECISIONS:
-- We use the async OpenAI client because FastAPI is async. Synchronous HTTP
-  calls would block the event loop.
-- The embedding dimension must match the VECTOR_DIMENSIONS in our pgvector
-  columns (1536 for text-embedding-3-small).
-
-WHY ABSTRACTED:
-- In the future, you might want to switch to a cheaper/local embedding model
-  (like BAAI/bge-small-en). Keeping the embedding logic behind a clean function
-  makes that swap easy without touching the router or database logic.
-"""
-
-from openai import AsyncOpenAI
+from google import genai
+from google.genai import types
 
 from app.config import get_settings
 
@@ -29,17 +17,17 @@ async def generate_embedding(text: str) -> list[float]:
         list[float]: A list of floats representing the embedding vector.
     """
     settings = get_settings()
-    
-    # We initialize the client inside the function so it picks up
-    # the API key if it's set after startup (e.g. during testing).
-    # In a larger app, you might inject this client as a dependency.
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    
-    # The API call is async
-    response = await client.embeddings.create(
-        input=text,
-        model=settings.EMBEDDING_MODEL
+    if not settings.GEMINI_API_KEY:
+      raise RuntimeError("Gemini provider is not configured")
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    response = await client.aio.models.embed_content(
+      model=settings.GEMINI_EMBEDDING_MODEL,
+      contents=text,
+      config=types.EmbedContentConfig(
+        output_dimensionality=settings.VECTOR_DIMENSIONS,
+      ),
     )
-    
-    # Return the float list from the first (and only) result
-    return response.data[0].embedding
+    if not response.embeddings or not response.embeddings[0].values:
+      raise ValueError("Gemini returned an empty embedding")
+    return list(response.embeddings[0].values)

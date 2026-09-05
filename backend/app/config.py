@@ -47,13 +47,15 @@ class Settings(BaseSettings):
     JWT_EXPIRY_MINUTES: int = 1440  # 24 hours
 
     # --- LLM Provider ---
-    LLM_PROVIDER: str = "openai"  # "openai" or "anthropic"
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    LLM_PROVIDER: str = "gemini"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+
 
     # --- Embeddings ---
     VECTOR_DIMENSIONS: int = 1536  # Matches text-embedding-3-small
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # --- CORS ---
     ALLOWED_ORIGINS: str = "http://localhost:5173"
