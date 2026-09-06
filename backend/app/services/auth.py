@@ -26,8 +26,8 @@ SECURITY NOTES:
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
+import jwt
 from fastapi import HTTPException, status
-from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,8 +55,8 @@ def create_access_token(user_id: str) -> str:
     Create a signed JWT containing the user ID and expiration time.
 
     The "sub" (subject) claim holds the user ID. The "exp" claim is
-    checked automatically by python-jose on decode — expired tokens
-    raise JWTError.
+    checked automatically by PyJWT on decode — expired tokens
+    raise jwt.ExpiredSignatureError.
     """
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRY_MINUTES)

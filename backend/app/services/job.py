@@ -4,10 +4,15 @@ Job Service — handles fetching, embedding, and upserting jobs into the databas
 DESIGN DECISIONS:
 - Upsert Logic: We use PostgreSQL's native `ON CONFLICT` via SQLAlchemy's `insert().on_conflict_do_update`.
   This allows us to run the sync endpoint multiple times without duplicating jobs.
-- Batched Operations (MVP): For simplicity in the MVP, we generate embeddings sequentially.
-  In a production system with hundreds of jobs, this should be sent to a Celery queue 
-  or processed asynchronously in batches to avoid API rate limits.
+- Inter-request Delay: We insert a small 0.2s pause between embedding requests to
+  stay well under the LLM provider's rate limit *proactively*. The exponential backoff
+  in embedding.py handles cases where we still get throttled.
+- Graceful Degradation: If one job fails to embed (e.g., after all retries are exhausted),
+  we skip it and continue with the remaining jobs rather than crashing the entire sync.
 """
+
+import asyncio
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -17,6 +22,11 @@ from app.config import get_settings
 from app.models.job import Job
 from app.services.embedding import generate_embedding
 from app.services.greenhouse import fetch_jobs_from_greenhouse
+
+logger = logging.getLogger(__name__)
+
+# Small delay between sequential embedding calls to avoid hitting rate limits
+INTER_REQUEST_DELAY = 0.2  # seconds
 
 
 async def sync_greenhouse_jobs(board_token: str, db: AsyncSession) -> dict:
@@ -36,22 +46,22 @@ async def sync_greenhouse_jobs(board_token: str, db: AsyncSession) -> dict:
         return {"processed": 0, "skipped": 0, "message": "No jobs found"}
         
     processed_count = 0
+    skipped_count = 0
     
     # 2. Process and Upsert
-    for job_data in fetched_jobs:
-        # Generate the vector embedding from the cleaned description
-        # Note: If the description is too long, OpenAI's API might throw an error.
-        # text-embedding-3-small supports up to 8191 tokens (~32k characters).
-        # We assume standard job descriptions fit within this limit.
+    for i, job_data in enumerate(fetched_jobs):
         try:
             embedding = await generate_embedding(job_data["description"])
         except Exception as e:
-            # If embedding fails (e.g. rate limit), skip this job and continue
-            continue
+            # After all retries are exhausted, skip this job gracefully
+            logger.warning(
+                "Skipping job %s (external_id=%s): embedding failed after retries: %s",
+                job_data["title"], job_data["external_id"], e,
+            )
+            skipped_count += 1
             continue
             
         # 3. Upsert into database
-        # We use Postgres INSERT ... ON CONFLICT to either create new jobs or update existing ones
         stmt = insert(Job).values(
             external_id=job_data["external_id"],
             title=job_data["title"],
@@ -76,12 +86,21 @@ async def sync_greenhouse_jobs(board_token: str, db: AsyncSession) -> dict:
         
         await db.execute(upsert_stmt)
         processed_count += 1
+
+        # Proactive rate-limit avoidance: small pause between embedding calls
+        if i < len(fetched_jobs) - 1:
+            await asyncio.sleep(INTER_REQUEST_DELAY)
         
     await db.commit()
     
+    logger.info(
+        "Greenhouse sync complete for '%s': %d processed, %d skipped",
+        normalized_token, processed_count, skipped_count,
+    )
+    
     return {
         "processed": processed_count,
-        "skipped": len(fetched_jobs) - processed_count,
+        "skipped": skipped_count,
         "message": "Jobs synced successfully"
     }
 
@@ -91,3 +110,4 @@ async def list_jobs(db: AsyncSession, limit: int = 50, offset: int = 0) -> list[
     query = select(Job).order_by(Job.fetched_at.desc()).limit(limit).offset(offset)
     result = await db.execute(query)
     return list(result.scalars().all())
+

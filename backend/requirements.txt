@@ -20,8 +20,8 @@ pydantic-settings>=2.5.0
 # ==============================
 # Auth
 # ==============================
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+PyJWT>=2.9.0
+bcrypt>=4.2.0
 email-validator>=2.0.0
 
 # ==============================

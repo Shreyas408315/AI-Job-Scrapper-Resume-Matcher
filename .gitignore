@@ -54,3 +54,9 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+
+# ==========================================
+# Dev-only test scripts (not part of source)
+# ==========================================
+backend/test_*.py
+PROJECT_STATUS_REPORT.md
