@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ai-job-scraper-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+    plan: free
+    region: ohio
+    envVars:
+      # Render automatically injects the PORT variable. 
+      # Our Dockerfile respects this, or defaults to 8000.
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true # Render will generate a random secure string for you
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GREENHOUSE_BOARD_WHITELIST
+        value: "airbnb,spotify,figma,cloudflare,discord"
