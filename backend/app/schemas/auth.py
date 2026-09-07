@@ -8,7 +8,7 @@ WHY PYDANTIC SCHEMAS (not raw dicts):
 - Separation of concerns: DB models (SQLAlchemy) vs API contracts (Pydantic)
   are kept separate, so internal DB changes don't leak to the API.
 """
-
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, EmailStr, Field
 
 

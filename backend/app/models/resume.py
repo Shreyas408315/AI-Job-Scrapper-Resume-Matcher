@@ -19,9 +19,13 @@ SECURITY NOTES:
 import uuid
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 from pgvector.sqlalchemy import Vector
+# pyrefly: ignore [missing-import]
 from sqlalchemy import ForeignKey, String, Text, func
+# pyrefly: ignore [missing-import]
 from sqlalchemy.dialects.postgresql import UUID
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base

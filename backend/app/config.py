@@ -13,7 +13,9 @@ is required at startup rather than having a predictable fallback.
 
 from functools import lru_cache
 
+# pyrefly: ignore [missing-import]
 from pydantic import Field, field_validator
+# pyrefly: ignore [missing-import]
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

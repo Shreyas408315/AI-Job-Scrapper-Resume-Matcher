@@ -8,8 +8,9 @@ DESIGN: "Thin routers" pattern — the router handles HTTP concerns (parsing
 request, returning response), while business logic lives in services/auth.py.
 This makes the logic testable without needing HTTP.
 """
-
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db

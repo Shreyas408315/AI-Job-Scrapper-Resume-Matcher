@@ -16,7 +16,9 @@ WHY expire_on_commit=False:
   an active session). Setting this to False keeps attributes accessible after commit.
 """
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_settings

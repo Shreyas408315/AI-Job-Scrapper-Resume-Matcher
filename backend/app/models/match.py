@@ -23,8 +23,11 @@ WHY JSONB (not separate columns):
 import uuid
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy import Float, ForeignKey, UniqueConstraint, func
+# pyrefly: ignore [missing-import]
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base

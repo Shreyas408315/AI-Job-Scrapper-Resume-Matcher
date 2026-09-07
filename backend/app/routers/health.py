@@ -8,6 +8,7 @@ Useful for:
 - Quick "is it up?" checks during development
 """
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter
 
 router = APIRouter(tags=["Health"])

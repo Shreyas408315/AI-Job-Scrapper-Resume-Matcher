@@ -6,10 +6,12 @@ Create Date: 2026-09-02 20:32:33.251131
 
 """
 from typing import Sequence, Union
-
 from alembic import op
+# pyrefly: ignore [missing-import]
 import sqlalchemy as sa
+# pyrefly: ignore [missing-import]
 from sqlalchemy.dialects import postgresql
+# pyrefly: ignore [missing-import]
 import pgvector
 
 # revision identifiers, used by Alembic.

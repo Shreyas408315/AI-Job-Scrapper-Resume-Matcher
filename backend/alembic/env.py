@@ -23,7 +23,9 @@ from logging.config import fileConfig
 sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from alembic import context
+# pyrefly: ignore [missing-import]
 from sqlalchemy import pool
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import our app's config and models
