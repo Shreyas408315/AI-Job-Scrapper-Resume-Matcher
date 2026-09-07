@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000' || 'https://ai-job-scrapper-resume-matcher.onrender.com'
+const API_URL = import.meta.env.VITE_API_URL || 'https://ai-job-scrapper-resume-matcher.onrender.com'
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('access_token')
