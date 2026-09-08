@@ -7,10 +7,14 @@ SECURITY CONTROLS:
   an executable renamed to .pdf.
 - Size limit: We enforce the 5MB size limit to prevent Denial of Service (DoS) via
   massive file parsing, which consumes heavy CPU/RAM.
+- Resume-likeness gate: Question PDFs and interview papers are not legitimate
+  resumes, and they should be rejected before embedding so the matching ranker
+  never learns from them and hallucinated high-confidence scores disappear.
 """
 
 import io
 import logging
+import re
 import zipfile
 from uuid import UUID
 
@@ -73,14 +77,21 @@ async def process_and_store_resume(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Could not extract text from the uploaded file.",
         )
-        
+
     if not extracted_text.strip():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="The file appears to be empty or contains no extractable text (e.g. image-only PDF)."
         )
-        
-    # 4. Generate Embedding
+
+    # 4. Resume-likeness validation
+    if not looks_like_resume_text(extracted_text):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The uploaded file does not look like a resume or candidate profile. Please upload a resume, CV, or experience document.",
+        )
+
+    # 5. Generate Embedding
     try:
         embedding = await generate_embedding(extracted_text)
     except Exception:
@@ -125,6 +136,54 @@ def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
             text_chunks.append(para.text)
             
     return "\n".join(text_chunks)
+
+
+def looks_like_resume_text(text: str) -> bool:
+    """
+    Reject obvious question-paper or interview-question PDFs before they
+    become resume embeddings. A real resume usually contains career sections
+    such as experience, education, skills, projects, summary, or company names.
+    """
+    if not text or not text.strip():
+        return False
+
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if not normalized:
+        return False
+
+    # Strong evidence the document is an assessment or exercise, not a CV.
+    # Examples: "Question 1", "What is ...", "Explain the flow ..."
+    question_style = re.search(
+        r"\b(question\s*\d*|questions?|answers?|what is|which of the|explain|interview|quiz|exam|assessment)\b",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if question_style:
+        return False
+
+    # Resume-like evidence. Requiring two or more distinct signals tends to
+    # reject Q&A PDFs while keeping a broad range of real resume forms.
+    resume_signals = [
+        "experience",
+        "education",
+        "skills",
+        "summary",
+        "profile",
+        "project",
+        "employment",
+        "work",
+        "company",
+        "developer",
+        "engineer",
+        "resume",
+        "cv",
+        "software",
+        "python",
+        "sql",
+    ]
+
+    matches = sum(1 for token in resume_signals if re.search(rf"\b{re.escape(token)}\b", normalized, flags=re.IGNORECASE))
+    return matches >= 2
 
 
 def detect_file_type(file_bytes: bytes) -> str | None:
