@@ -23,8 +23,13 @@ async def rank_matches(
     user: User,
     top_n: int,
     db: AsyncSession,
+    board_token: str | None = None,
 ) -> list[Match]:
-    """Rank jobs for an owned, embedded resume and persist the results."""
+    """Rank jobs for an owned, embedded resume and persist the results.
+
+    If a board token is provided, we limit the semantic search space to that
+    Greenhouse board so the dashboard answers only the source the user chose.
+    """
     resume_query = select(Resume).where(
         Resume.id == resume_id,
         Resume.user_id == user.id,
@@ -43,6 +48,12 @@ async def rank_matches(
     ranked_query = (
         select(Job, similarity)
         .where(Job.embedding.is_not(None))
+    )
+    if board_token:
+        ranked_query = ranked_query.where(Job.company == board_token.lower())
+
+    ranked_query = (
+        ranked_query
         .order_by(similarity.desc())
         .limit(top_n)
     )

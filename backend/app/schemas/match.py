@@ -32,8 +32,14 @@ class MatchResponse(BaseModel):
 
 
 class MatchRequest(BaseModel):
-    """Request to trigger matching for a resume."""
+    """Request to trigger matching for a resume.
+
+    `board_token` is optional; when supplied, the ranking service filters
+    the job index to that source board instead of comparing the resume to
+    every job row already embedded in the database.
+    """
     top_n: int = Field(default=10, ge=1, le=100)  # How many top matches to return
+    board_token: str | None = Field(default=None, min_length=1, max_length=80)
 
 
 class MatchExplanation(BaseModel):

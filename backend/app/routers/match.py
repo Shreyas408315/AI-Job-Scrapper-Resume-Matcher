@@ -23,8 +23,19 @@ async def create_matches(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(rate_limit(10, 60)),
 ):
-    """Return the top jobs for an authenticated user's resume."""
-    matches = await rank_matches(resume_id, current_user, request.top_n, db)
+    """Return the top jobs for an authenticated user's resume.
+
+    When the client sends a board token, only that source is ranked. This
+    prevents stale jobs from old boards (airbnb, figma, cloudflare) from
+    collapsing the view into the same near-equal similarity totals.
+    """
+    matches = await rank_matches(
+        resume_id,
+        current_user,
+        request.top_n,
+        db,
+        board_token=request.board_token,
+    )
     results = [
         MatchResult(
             id=match.id,

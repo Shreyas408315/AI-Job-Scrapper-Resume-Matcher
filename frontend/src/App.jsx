@@ -35,7 +35,7 @@ function UploadPage() {
 
 function Dashboard() {
   const [resumes, setResumes] = useState([]); const [matches, setMatches] = useState(null); const [board, setBoard] = useState('airbnb'); const [error, setError] = useState(''); const [busy, setBusy] = useState('')
-  async function loadMatches(resumeId) { setBusy('match'); try { setMatches(await apiRequest(`/api/matches/${resumeId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ top_n: 10 }) })) } catch (err) { setError(err.message) } finally { setBusy('') } }
+  async function loadMatches(resumeId) { setBusy('match'); try { setMatches(await apiRequest(`/api/matches/${resumeId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ top_n: 10, board_token: board }) })) } catch (err) { setError(err.message) } finally { setBusy('') } }
   useEffect(() => { apiRequest('/api/resumes/me').then((data) => { setResumes(data); if (data[0]?.has_embedding) loadMatches(data[0].id) }).catch((err) => setError(err.message)) }, [])
   async function syncJobs() { setBusy('sync'); setError(''); try { await apiRequest(`/api/jobs/sync/${board}`, { method: 'POST' }); if (resumes[0]) await loadMatches(resumes[0].id) } catch (err) { setError(err.message) } finally { setBusy('') } }
   if (!resumes.length) return <section className="empty-state"><span className="step-mark">01</span><p className="eyebrow">YOUR DASHBOARD</p><h1>Start with a resume.</h1><p>Once we have your experience, we can show you where it travels.</p><Link className="primary-button inline-button" to="/upload">Upload resume</Link></section>
