@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 5
 
     # --- Greenhouse Job Board ---
-    GREENHOUSE_BOARD_WHITELIST: str = "airbnb,spotify,figma,cloudflare"
+    GREENHOUSE_BOARD_WHITELIST: str = "airbnb,figma,cloudflare"
 
     # --- Derived properties (not loaded from env) ---
 
