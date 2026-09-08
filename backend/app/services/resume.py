@@ -22,6 +22,7 @@ import magic
 import pdfplumber
 from docx import Document
 from fastapi import HTTPException, UploadFile, status
+from pypdfium2 import PdfDocument
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -117,16 +118,44 @@ async def process_and_store_resume(
 
 
 def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
-    """Extract raw text from PDF or DOCX file bytes in memory."""
+    """Extract raw text from PDF or DOCX file bytes in memory.
+
+    We keep the fast `pdfplumber` extraction as the first pass, but if it finds
+    no pages or the PDF is scanned/model-generated text with a missing text layer,
+    we fall back to the PDFium-backed `pypdfium2` parser already available in the
+    workspace environment. That path reads the true page text range and avoids
+    the false ‘all PDFs produce the same matching score’ collapse.
+    """
     text_chunks = []
-    
+
     if file_type == "pdf":
-        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_chunks.append(page_text)
-                    
+        try:
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text(layout=False)
+                    if page_text:
+                        text_chunks.append(page_text)
+        except Exception:
+            logger.warning("pdfplumber failed to extract PDF text")
+
+        if not text_chunks:
+            try:
+                with PdfDocument(io.BytesIO(file_bytes)) as doc:
+                    for idx in range(len(doc)):
+                        page = doc.get_page(idx)
+                        try:
+                            text_page = page.get_textpage()
+                            page_text = text_page.get_text_range()
+                        finally:
+                            try:
+                                page.close()
+                            except Exception:
+                                pass
+                        if page_text:
+                            text_chunks.append(page_text)
+            except Exception:
+                logger.warning("pypdfium2 fallback failed to extract PDF text")
+
     elif file_type == "docx":
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
             if "[Content_Types].xml" not in archive.namelist():
@@ -134,15 +163,24 @@ def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
         doc = Document(io.BytesIO(file_bytes))
         for para in doc.paragraphs:
             text_chunks.append(para.text)
-            
+
     return "\n".join(text_chunks)
 
 
 def looks_like_resume_text(text: str) -> bool:
     """
-    Reject obvious question-paper or interview-question PDFs before they
-    become resume embeddings. A real resume usually contains career sections
-    such as experience, education, skills, projects, summary, or company names.
+    Keep the document gate focused on true false positives without blocking
+    valid resumes. A resume-like PDF usually contains one or more of these:
+
+    1. Contact metadata: name, email, phone, location.
+    2. Career content: experience, education, skills, projects, work history.
+    3. Professional vocabulary: engineer, developer, backend, frontend,
+       software, cloud, etc.
+
+    A question-paper or interview-quiz PDF will often have obvious markers
+    like Question / What is / Explain the / exam / quiz. Those markers are
+    rejected early, but the gate never requires a strict section list that
+    would silently exclude real CVs from different layouts.
     """
     if not text or not text.strip():
         return False
@@ -151,39 +189,52 @@ def looks_like_resume_text(text: str) -> bool:
     if not normalized:
         return False
 
-    # Strong evidence the document is an assessment or exercise, not a CV.
-    # Examples: "Question 1", "What is ...", "Explain the flow ..."
-    question_style = re.search(
-        r"\b(question\s*\d*|questions?|answers?|what is|which of the|explain|interview|quiz|exam|assessment)\b",
-        normalized,
-        flags=re.IGNORECASE,
-    )
-    if question_style:
+    # Reject obvious question-style documents.
+    low_quality_markers = [
+        "question ",
+        "question 1",
+        "questionnaire",
+        "interview",
+        "quiz",
+        "exam",
+        "assessment",
+        "answers:",
+        "what is",
+        "which of the following",
+        "explain the",
+        "multiple choice",
+    ]
+    if any(marker in normalized.lower() for marker in low_quality_markers):
         return False
 
-    # Resume-like evidence. Requiring two or more distinct signals tends to
-    # reject Q&A PDFs while keeping a broad range of real resume forms.
-    resume_signals = [
-        "experience",
-        "education",
-        "skills",
-        "summary",
-        "profile",
-        "project",
-        "employment",
-        "work",
-        "company",
-        "developer",
-        "engineer",
-        "resume",
-        "cv",
-        "software",
-        "python",
-        "sql",
-    ]
+    # A resume should reveal enough shape to be vectorized safely.
+    # Positive scoring is softer than the earlier hard two-signal gate.
+    evidence = 0
 
-    matches = sum(1 for token in resume_signals if re.search(rf"\b{re.escape(token)}\b", normalized, flags=re.IGNORECASE))
-    return matches >= 2
+    # Contact evidence
+    if re.search(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", normalized):
+        evidence += 1
+    if re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", normalized):
+        evidence += 1
+    if re.search(r"\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b", normalized):
+        evidence += 1
+
+    # Section and experience evidence
+    resume_patterns = [
+        r"\b(experience|worked|employment|internship|professional|career)\b",
+        r"\b(education|degree|university|school|college|masters|bachelor)\b",
+        r"\b(skills|technologies|tools|experience with|proficient|expertise)\b",
+        r"\b(projects?|portfolio|built|developed|implementation)\b",
+        r"\b(company|organization|organizations|team|worked at|role|lead)\b",
+        r"\b(resume|cv|developer|engineer|software|backend|frontend|python|sql)\b",
+    ]
+    for pattern in resume_patterns:
+        if re.search(pattern, normalized, flags=re.IGNORECASE):
+            evidence += 1
+
+    # Be generous: a real resume can be short and still clear.
+    # A minimum of 2 signals should allow it through; 1 signal is not enough.
+    return evidence >= 2
 
 
 def detect_file_type(file_bytes: bytes) -> str | None:
